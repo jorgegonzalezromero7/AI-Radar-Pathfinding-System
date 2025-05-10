@@ -53,5 +53,31 @@ class Map:
         return locations
     
     def compute_detection_map(self) -> np.array:
-        """ Computes the detection map for each coordinate in the map (with all the radars) """
-        ...
+        lat_range = np.linspace(self.boundaries.min_lat, self.boundaries.max_lat, self.height)
+        lon_range = np.linspace(self.boundaries.min_lon, self.boundaries.max_lon, self.width)
+        grid = np.array(np.meshgrid(lat_range, lon_range)).T.reshape(-1, 2).reshape(self.height, self.width, 2)
+
+        # Initialize the detection map with zeros
+        detection_map = np.zeros((grid.shape[0], grid.shape[1]), dtype=np.float32)
+
+        # Iterate over each cell in the grid
+        for i in range(grid.shape[0]):
+            for j in range(grid.shape[1]):
+                latitude, longitude = grid[i, j]
+
+                # Compute the detection level for each radar and take the maximum
+                detection_map[i, j] = max(radar.compute_detection_level(latitude, longitude) for radar in self.radars)
+
+        # Normalize the detection map using MinMax scaling
+        detection_min = np.min(detection_map)
+        detection_max = np.max(detection_map)
+        epsilon = 1e-4  # Small value to avoid zero probabilities
+
+        if detection_max > detection_min:  # Avoid division by zero
+            detection_map = ((detection_map - detection_min) / (detection_max - detection_min)) * (
+                        1 - epsilon) + epsilon
+        else:
+            # If all values are the same, set the entire map to epsilon
+            detection_map.fill(epsilon)
+
+        return detection_map
